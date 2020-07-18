@@ -72,6 +72,8 @@ static void DrawBody(Body* body)
 	Vec2 x = body->position;
 	Vec2 h = 0.5f * body->width;
 
+	ImGui::Text("(%f, %f) (%f, %f)", x.x, x.y, h.x, h.y);
+
 	Vec2 v1 = x + R * Vec2(-h.x, -h.y);
 	Vec2 v2 = x + R * Vec2( h.x, -h.y);
 	Vec2 v3 = x + R * Vec2( h.x,  h.y);
@@ -130,18 +132,42 @@ static void LaunchBomb()
 	bomb->angularVelocity = Random(-20.0f, 20.0f);
 }
 
+int calledCnt = 0;
+static void LaunchBombAtMouse()
+{
+    calledCnt++;
+    double x, y;
+    glfwGetCursorPos(mainWindow, &x, &y);
+
+    // 新增 bomb
+    if (!bomb)
+    {
+        bomb = bodies + numBodies;
+        bomb->Set(Vec2(1.0f, 1.0f), 50.0f);
+        bomb->friction = 0.2f;
+        world.Add(bomb);
+        ++numBodies;
+    }
+
+    bomb->position.Set(x, y);
+    bomb->rotation = Random(-1.5f, 1.5f);
+    bomb->velocity = -1.5f * bomb->position;
+    bomb->angularVelocity = Random(-20.0f, 20.0f);
+}
+
+float floorPos[2];
 // Single box
 static void Demo1(Body* b, Joint* j)
 {
 	// 地板
-	b->Set(Vec2(10.0f, 2.0f), FLT_MAX);
-	b->position.Set(0.0f, -0.5f * b->width.y);
+	b->Set(Vec2(1.0f, 1.0f), FLT_MAX);
+	b->position.Set(floorPos[0], floorPos[1]);
 	world.Add(b);
 	++b; ++numBodies;
 
 	// 箱子
 	b->Set(Vec2(1.0f, 1.0f), 1000.0f);
-	b->position.Set(0.0f, 10.0f);
+	b->position.Set(0.0f, 100.0f);
 	world.Add(b);
 	++b; ++numBodies;
 }
@@ -213,7 +239,7 @@ static void Demo3(Body* b, Joint* j)
 	float friction[5] = {0.75f, 0.5f, 0.35f, 0.1f, 0.0f};
 	for (int i = 0; i < 5; ++i)
 	{
-		b->Set(Vec2(0.5f, 0.5f), 25.0f);3
+		b->Set(Vec2(0.5f, 0.5f), 25.0f);
 		b->friction = friction[i];
 		b->position.Set(-7.5f + 2.0f * i, 14.0f);
 		world.Add(b);
@@ -567,6 +593,12 @@ static void Keyboard(GLFWwindow* window, int key, int scancode, int action, int 
 	}
 }
 
+static void MouseButton(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+        LaunchBombAtMouse();
+}
+
 static void Reshape(GLFWwindow*, int w, int h)
 {
 	width = w;
@@ -577,10 +609,16 @@ static void Reshape(GLFWwindow*, int w, int h)
 	glLoadIdentity();
 
 	float aspect = float(width) / float(height);
+	printf("aspect = %f\n", aspect);
+	printf("A = %f\nB = %f\n", zoom * aspect, zoom + pan_y);
 	if (width >= height)
 	{
 		// aspect >= 1, set the height from -1 to 1, with larger width
-		glOrtho(-zoom * aspect, zoom * aspect, -zoom + pan_y, zoom + pan_y, -1.0, 1.0);
+		glOrtho(-zoom * aspect, // left
+		         zoom * aspect, // right
+		        -zoom + pan_y,  // bottom
+		         zoom + pan_y,  // top
+		        -1.0, 1.0);
 	}
 	else
 	{
@@ -621,6 +659,7 @@ int main(int, char**)
 	glfwSwapInterval(1);
 	glfwSetWindowSizeCallback(mainWindow, Reshape);
 	glfwSetKeyCallback(mainWindow, Keyboard);
+	glfwSetMouseButtonCallback(mainWindow, MouseButton);
 
 	float xscale, yscale;
 	glfwGetWindowContentScale(mainWindow, &xscale, &yscale);
@@ -678,17 +717,24 @@ int main(int, char**)
 			DrawText(5, 125, buffer);
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-
+        ImGui::Begin("Debug");
+        ImGui::Text("%d", calledCnt);
+        ImGui::DragFloat2("Pos", floorPos);
+        bodies[0].position.Set(floorPos[0], floorPos[1]);
+        ImGui::End();
+		// 模擬物理 timeStep
 		world.Step(timeStep);
 
-		//畫Body&joints
+		// 畫Body&joints
+		ImGui::Begin("Bodies");
 		for (int i = 0; i < numBodies; ++i)
 			DrawBody(bodies + i);
+		ImGui::End();
 
 		for (int i = 0; i < numJoints; ++i)
 			DrawJoint(joints + i);
 
-		//畫contact point
+		// 畫 contact point
 		glPointSize(4.0f);
 		glColor3f(1.0f, 0.0f, 0.0f);
 		glBegin(GL_POINTS);

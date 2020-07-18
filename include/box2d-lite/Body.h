@@ -17,6 +17,11 @@
 struct Body
 {
 	Body();
+	/**
+	 * @brief 設定寬高和質量
+	 * @param w 寬高
+	 * @param m 質量
+	 */
 	void Set(const Vec2& w, float m);
 
 	void AddForce(const Vec2& f)
